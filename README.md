@@ -41,14 +41,20 @@ Perlinノイズについて質問やコメントがある場合は、メッセ�
 Perlinノイズアルゴリズムと、このプロジェクトから得たその他の知識について詳しく説明します。
 
 # Use caution
-请勿生成过大地图，在地图大小5*5~10*10 等比插值比率5倍或10倍 范围中生成为好。
-当生成5*5,5倍插值比率地图时将生成8405个方块。
-生成后可以使用Q/E键旋转观察地块。
+1、请勿生成过大地图，在地图大小5*5~10*10 等比插值比率5倍或10倍 范围中生成为好。
 
-Do not generate too large map, it is better to generate in the range of the interpolation ratio 5 times or 10 times of the map size 5*5~10*10.
-When generating a 5*5, 5x interpolation ratio map, 8405 blocks will be generated.
-After spawning, you can use the Q/E keys to rotate the observation plot.
+2、当生成5*5,5倍插值比率地图时将生成8405个方块。
 
-大きすぎるマップを生成しないでください、マップサイズ5×5~10×10、線形値挿入比率の5倍または10倍の範囲で生成するのが良いでしょう。
-5*5、5x補間比マップを生成すると、8405ブロックが生成されます。
-生成した後、Q/Eキーを使用して観測プロットを回転させることができます。
+3、生成后可以使用Q/E键旋转观察地块。
+
+1、Do not generate too large map, it is better to generate in the range of the interpolation ratio 5 times or 10 times of the map size 5*5~10*10.
+
+2、When generating a 5*5, 5x interpolation ratio map, 8405 blocks will be generated.
+
+3、After spawning, you can use the Q/E keys to rotate the observation plot.
+
+1、大きすぎるマップを生成しないでください、マップサイズ5×5~10×10、線形値挿入比率の5倍または10倍の範囲で生成するのが良いでしょう。
+
+2、5*5、5x補間比マップを生成すると、8405ブロックが生成されます。
+
+3、生成した後、Q/Eキーを使用して観測プロットを回転させることができます。
