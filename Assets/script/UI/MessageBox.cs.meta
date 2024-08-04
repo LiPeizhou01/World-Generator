@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: f7c31def2c1163d49861d0180d36bbca
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - errMessageBox: {instanceID: 0}
+  - messageFont: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
