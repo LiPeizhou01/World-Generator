@@ -1,0 +1,603 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Map_generator
+{
+    public struct Point
+    {
+        public double altitude; // 储存地图高度波动
+        public double humidity; // 储存地图湿度波动
+        public double temperature;
+
+        // 四舍五入方法
+        public Point Round(int num)
+        {
+            Point newPoint = new Point();
+            newPoint.altitude = Math.Round(altitude, num);
+            newPoint.humidity = Math.Round(humidity, num);
+            newPoint.temperature = Math.Round(temperature, num);
+            return newPoint;
+        }
+
+        // 向上取整方法
+        public Point Ceiling(int num)
+        {
+            Point newPoint = new Point();
+            newPoint.altitude = Math.Ceiling(altitude * Math.Pow(10, num))/Math.Pow(10,num);
+            newPoint.humidity = Math.Ceiling(humidity * Math.Pow(10, num))/Math.Pow(10, num);
+            newPoint.temperature = Math.Ceiling(temperature * Math.Pow(10, num))/Math.Pow(10, num);
+            return newPoint;
+        }
+
+        // 正规化至单位长方法
+        public Point Quantization(int num)
+        {
+            // 判断输入num是否合法
+            if (num <= 0)
+            {
+                throw new ArgumentException("Denominator must be positive.");
+            }
+
+            if (IsDivisionResultWillRepeating(num))
+            {
+                throw new Exception("This partitioning does not yield a finite decimal.");
+            }
+
+            Point newPoint = new Point();
+            // 将噪声乘扩大倍数，四舍五入至整数位，再除扩大倍数以达到取至单位的效果
+            newPoint.altitude = Math.Round(altitude * num) / num; 
+            newPoint.humidity = Math.Round(humidity * num) / num;
+            newPoint.temperature = Math.Round(temperature * num) / num;
+            return newPoint;
+        }
+
+        // 用于判断是否会生成循环小数
+        private static bool IsDivisionResultWillRepeating(int num)
+        {
+            // 除以5，直到不能再除
+            while (num % 5 == 0)
+            {
+                num /= 5;
+            }
+
+            // 除以2，直到不能再除
+            while (num % 2 == 0)
+            {
+                num /= 2;
+            }
+
+            // 如果最终结果是1，说明只有2和5的因子
+            return num != 1;
+        }
+
+        // 重载除法运算符
+        public static Point operator -(Point p1,Point p2)
+        {
+            Point newPoint = new Point();
+            newPoint.altitude = p1.altitude - p2.altitude;
+            newPoint.humidity = p1.humidity - p2.humidity;
+            newPoint.temperature = p1.temperature - p2.temperature;
+            return newPoint;
+        }
+        // 重载加法运算符
+        public static Point operator +(Point p1, Point p2)
+        {
+            Point newPoint = new Point();
+            newPoint.altitude = p1.altitude + p2.altitude;
+            newPoint.humidity = p1.humidity + p2.humidity;
+            newPoint.temperature = p1.temperature +p2.temperature;
+            return newPoint;
+        }
+
+        // 重载除法运算符
+        public static Point operator /(Point p, double num)
+        {
+            Point newPoint = new Point();
+            newPoint.altitude = p.altitude/num;
+            newPoint.humidity = p.humidity/num;
+            newPoint.temperature = p.temperature/num;
+            return newPoint;
+        }
+
+        // 重载乘法运算符
+        public static Point operator *(Point p, double num)
+        {
+            Point newPoint = new Point();
+            newPoint.altitude = p.altitude * num;
+            newPoint.humidity = p.humidity * num;
+            newPoint.temperature = p.temperature * num;
+            return newPoint;
+        }
+
+        public void Affect()
+        {
+            temperature += altitude * - 0.07;
+            humidity = humidity + (temperature - 0.1) * 0.07;
+        }
+    }
+
+    public class Map
+    {
+        private int _width;
+        private int _length;
+        private int octave;
+        private double persistence;
+        private double scale = 0.1;
+        private int _magnification;
+        private Point[,] points;
+        private Point[,] linearConnectedPoints;
+        private readonly int seed;// 地图种子 
+        public readonly double altitudeRandAngle_1;
+        public readonly double altitudeRandAngle_2;
+        public readonly double humidityRandAngle_1;
+        public readonly double humidityRandAngle_2;
+        public readonly double temperatureRandAngle_1;
+        public readonly double temperatureRandAngle_2;
+        public string mapSeed // 拼接字符串
+        {
+            get
+            {
+
+                return seed.ToString("X").PadRight(8, '0');
+            }
+        }
+        public int Magnification { get { return _magnification; } set { _magnification = value; } }
+        public int Grid // 两个柏林噪声之间的线性插值个数，等比扩大的情况下理论上等于_magnification
+        {
+            get { return _magnification; }
+        }
+        public int Width
+        {
+            set { _width = value; }
+            get { return _width; }
+        }
+        public int WidthBeGrid // 线性链接后的地图款
+        {
+            get { return (_width - 1) * Grid +1; }
+        }
+        public int Length
+        {
+            set { _length = value; }
+            get { return _length; }
+        }
+        public int LengthBeGrid // 线性链接后的地图长
+        {
+            get { return (_length - 1) * Grid +1; }
+        }
+        public Map(int width, int length, int magnification = 10) 
+        {
+            // 随机生成种子
+            Random rand = new Random();
+            seed = rand.Next(int.MinValue, int.MaxValue);
+
+            // 初始化长宽，扩大比例
+            Width = width;
+            Length = length;
+            this.Magnification = magnification;
+
+            // 初始化地图随机角
+            Random mapRand = new Random(seed);
+            altitudeRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            altitudeRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+            humidityRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            humidityRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+            temperatureRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            temperatureRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+
+            // 生成地图
+            points = MapBasicSetter(Width,Length);
+
+            // 对地图线性链接
+            linearConnectedPoints = Lnearization(points);
+        }
+
+        public Map(int width, int length, string seed, int magnification = 10)
+        {
+            // 判断种子是否合法，并根据提供的种子初始化地图
+            if (seed.Length == 8 && int.TryParse(seed, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int seedValue))
+            {
+                this.seed = seedValue;
+
+                Console.WriteLine(mapSeed);
+            }
+            else
+            {
+                throw new ArgumentException("the seed is incorrect!");
+            }
+
+            // 初始化长宽，和扩大比例
+            Width = width;
+            Length = length;
+            this.Magnification = magnification;
+
+            Random mapRand = new Random(this.seed);
+            altitudeRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            altitudeRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+            humidityRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            humidityRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+            temperatureRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            temperatureRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+
+            // 生成随机点
+            points = MapBasicSetter(Width, Length);
+            linearConnectedPoints = Lnearization(points);
+        }
+
+        public Map(int width, int length, int octave, double persistence, int magnification = 10)
+        {
+            // 随机生成种子
+            Random rand = new Random();
+            seed = rand.Next(int.MinValue, int.MaxValue);
+
+            Width = width;
+            Length = length;
+
+            this.octave = octave;
+            this.persistence = persistence;
+            this.Magnification = magnification;
+
+            // 初始化地图随机角
+            Random mapRand = new Random(seed);
+            altitudeRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            altitudeRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+            humidityRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            humidityRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+            temperatureRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            temperatureRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+
+            points = MapBasicSetter(Width, Length, this.octave, this.persistence);
+            linearConnectedPoints = Lnearization(points);
+        }
+
+        public Map(int width, int length, int octave, double persistence, string seed, int magnification = 10)
+        {
+            // 添加波形叠加 其他同上
+            if (seed.Length == 8 && int.TryParse(seed, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int seedValue))
+            {
+                this.seed = seedValue;
+            }
+            else
+            {
+                throw new ArgumentException("the seed is incorrect!");
+            }
+
+            Width = width;
+            Length = length;
+
+            this.octave = octave;
+            this.persistence = persistence;
+            this.Magnification = magnification;
+
+            Random mapRand = new Random(this.seed);
+            altitudeRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            altitudeRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+            humidityRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            humidityRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+            temperatureRandAngle_1 = mapRand.NextDouble() * Math.PI * 2;
+            temperatureRandAngle_2 = mapRand.NextDouble() * Math.PI * 2;
+
+            points = MapBasicSetter(Width, Length, this.octave, this.persistence);
+            linearConnectedPoints = Lnearization(points);
+        }
+        private Point[,] MapBasicSetter(int width ,int length)
+        {
+            NoiseGengerator rand = new NoiseGengerator();  // 获取柏林噪声生成器
+            Point[,] points = new Point[width,length];  // 初始化数组
+            int ofsetX_randNum1 = seed & 0x0000FF;   // 根据高度种子设置X轴起始点
+            int ofsetY_randNum1 = (seed & 0xFF0000) >> 16;  // 根据高度种子设置Y轴起始点
+            for (int i=0; i <width; i++)
+            {
+                for(int j=0; j<length; j++)
+                {
+                    // 生成
+                    double sampleX = i*scale + ofsetX_randNum1;  
+                    double sampleY = j*scale + ofsetY_randNum1;
+
+                    // 除插值间隔scale，相当于为我们的噪声添加一个单位
+                    // 这样后续我们可以通过乘以预制体的边长来移除，预制体大小变化而带来的影响
+                    points[i, j].altitude = rand.PerlinNoize2d(sampleX,sampleY, altitudeRandAngle_1, altitudeRandAngle_2) / scale;
+                }
+            }
+
+            int ofsetX_randNum2 = (seed & 0x0000FF);  //  根据湿度种子设置X轴起始点
+            int ofsetY_randNum2 = (seed & 0xFF0000) >> 16;  // 根据湿度种子设置X轴起始点
+
+            for (int i = 0; i < width; i++)
+            {
+                for (int j = 0; j < length; j++)
+                {
+                    // 生成
+                    double sampleX = i * scale+ ofsetX_randNum2;
+                    double sampleY = j * scale+ ofsetY_randNum2;
+                    points[i, j].humidity = rand.PerlinNoize2d(sampleX, sampleY, humidityRandAngle_1,humidityRandAngle_2) / scale;
+                }
+            }
+
+            int ofsetX_randNum3 = (seed & 0x0000FF);  //  根据湿度种子设置X轴起始点
+            int ofsetY_randNum3 = (seed & 0xFF0000) >> 16;  // 根据湿度种子设置X轴起始点
+
+            for (int i = 0; i < width; i++)
+            {
+                for (int j = 0; j < length; j++)
+                {
+                    // 生成
+                    double sampleX = i * scale + ofsetX_randNum3;
+                    double sampleY = j * scale + ofsetY_randNum3;
+                    points[i, j].temperature = rand.PerlinNoize2d(sampleX, sampleY, temperatureRandAngle_1, temperatureRandAngle_2) / scale;
+                }
+            }
+
+            for (int i = 0; i < width; i++)
+            {
+                for (int j = 0; j < length; j++)
+                {
+                    points[i, j].Affect();
+                }
+            }
+            return points;
+        }
+
+        // 重载添加了波形叠加方法
+        private Point[,] MapBasicSetter(int width, int length, int octave, double persistence)
+        {
+            NoiseGengerator rand = new NoiseGengerator();
+            Point[,] points = new Point[width, length];
+            int ofsetX_randNum1 = seed & 0x0000FF;   // 根据高度种子设置X轴起始点
+            int ofsetY_randNum1 = (seed & 0xFF0000) >> 16;  // 根据高度种子设置Y轴起始点
+            for (int i = 0; i < width; i++)
+            {
+                for (int j = 0; j < length; j++)
+                {
+                    double sampleX = i * scale + ofsetX_randNum1;
+                    double sampleY = j * scale + ofsetY_randNum1;
+                    points[i, j].altitude = rand.OctavePerlinNoise2d(sampleX, sampleY, octave, persistence, altitudeRandAngle_1, altitudeRandAngle_2) / scale;
+                }
+            }
+
+            int ofsetX_randNum2 = seed & 0x0000FF;   // 根据高度种子设置X轴起始点
+            int ofsetY_randNum2 = (seed & 0xFF0000) >> 16;  // 根据高度种子设置Y轴起始点
+
+            for (int i = 0; i < width; i++)
+            {
+                for (int j = 0; j < length; j++)
+                {
+                    double sampleX = i * scale + ofsetX_randNum2;
+                    double sampleY = j * scale + ofsetY_randNum2;
+                    points[i, j].humidity = rand.OctavePerlinNoise2d(sampleX, sampleY, octave, persistence, humidityRandAngle_1, humidityRandAngle_2) / scale;
+                }
+            }
+
+            int ofsetX_randNum3 = seed & 0x0000FF;   // 根据高度种子设置X轴起始点
+            int ofsetY_randNum3 = (seed & 0xFF0000) >> 16;  // 根据高度种子设置Y轴起始点
+
+            for (int i = 0; i < width; i++)
+            {
+                for (int j = 0; j < length; j++)
+                {
+                    double sampleX = i * scale + ofsetX_randNum3;
+                    double sampleY = j * scale + ofsetY_randNum3;
+                    points[i, j].temperature = rand.OctavePerlinNoise2d(sampleX, sampleY, octave, persistence, temperatureRandAngle_1, temperatureRandAngle_2) / scale;
+                }
+            }
+
+            for (int i = 0; i < width; i++)
+            {
+                for (int j = 0; j < length; j++)
+                {
+                    points[i, j].Affect();
+                }
+            }
+            return points;
+        }
+
+        private Point[,] Lnearization(Point[,] p)
+        {
+            // 线性化连接方法
+            int width = p.GetLength(0);
+            int length = p.GetLength(1);
+            Point[,] linearConnected = new Point[(width-1)*Grid+1, (length-1)*Grid+1];
+            for (int i = 0; i < width; i++)
+            {
+                for (int j = 0; j < length; j++)
+                {
+                    // 先只从有数字的第二轨方向，递进计算该行的所有值
+                    linearConnected[i*Grid, j*Grid] = p[i, j];
+                    if (j+1 < length)
+                    {
+                        // 利用两点之间的差，均分取值
+                        Point diff = p[i, j + 1] - p[i, j];
+                        for (int s = 1; s < Grid; s++)
+                        {
+                            linearConnected[(i * Grid), j * Grid + s] = linearConnected[(i * Grid), j * Grid + s - 1] + diff / (Grid - s + 1);
+                            diff = p[i, j + 1] - linearConnected[i * Grid, j * Grid + s];
+                        }
+                    }
+                }
+            }
+
+            for (int j = 0; j<((length-1)*Grid+1); j++)
+            {
+                for (int i=0; i<width; i++)
+                {
+                    // 再从第一轨的方向上完全填充列表
+                    if (i+1 < width)
+                    {
+                        Point diff = linearConnected[(i + 1) * Grid, j] - linearConnected[i * Grid, j];
+                        for (int s = 1; s < Grid; s++)
+                        {
+                            linearConnected[(i * Grid) + s, j] = linearConnected[(i * Grid) + s - 1, j] + diff / (Grid - s + 1);
+                            diff = linearConnected[(i + 1) * Grid, j] - linearConnected[(i * Grid) + s, j];
+                        }
+                    }
+                }
+            }
+
+            // Point[(width - 1) * Grid + 1, (length - 1) * Grid + 1];
+            for(int i=0; i< (width - 1) * Grid + 1; i++)
+            {
+                for(int j=0; j < (length - 1) * Grid + 1; j++)
+                {
+                    // 将所有值正规化至单位长的倍数
+                    linearConnected[i, j] = linearConnected[i, j].Quantization(Grid);
+                }
+            }
+            return linearConnected;
+        }
+
+
+        public Point[,] MapGetter() //原始噪声地图获取器
+        {
+            return points;
+        }
+
+        public Point[,] LinearizedMapGetter() //线性连接后噪声地图获取器
+        {
+            return linearConnectedPoints;
+        }
+
+        bool _isLinearNeed = true; // 用于判断枚举器返回对象
+
+        public bool IsLinearNeed  //用于从外部设置返回对象
+        {
+            set { _isLinearNeed = value; }
+            get { return _isLinearNeed; }
+        }
+        
+        public IEnumerator<Point> GetEnumerator() // 枚举器，当 IslinearNeed 为 true 时返回 linearConnectedPoints，为 false 时返回points
+        {
+            return _isLinearNeed ? LinearMapEnumeratorCreator(): MapEnumeratorCreator();
+        }
+
+        public IEnumerator<Point> MapEnumeratorCreator() // points 迭代器
+        {
+            for (int i = 0; i < Width; i++)
+            {
+                for (int j = 0; j < Length; j++)
+                {
+                    yield return points[i, j];
+                }
+            }
+        }
+
+        public IEnumerator<Point> LinearMapEnumeratorCreator() // linearConnectedPoints 迭代器
+        {
+            for (int i=0; i< WidthBeGrid; i++)
+            {
+                for (int j=0; j< LengthBeGrid; j++)
+                {
+                    yield return linearConnectedPoints[i, j];
+                }
+            }
+        }
+    }
+
+    public class NoiseGengerator
+    {
+        // 梯度置换表，完全使用Ken Perlin的源码中的置换表
+        private static readonly int[] permutation = { 151,160,137,91,90,15,
+    131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
+    190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,
+    88,237,149,56,87,174,20,125,136,171,168, 68,175,74,165,71,134,139,48,27,166,
+    77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,
+    102,143,54, 65,25,63,161, 1,216,80,73,209,76,132,187,208, 89,18,169,200,196,
+    135,130,116,188,159,86,164,100,109,198,173,186, 3,64,52,217,226,250,124,123,
+    5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,
+    223,183,170,213,119,248,152, 2,44,154,163, 70,221,153,101,155,167, 43,172,9,
+    129,22,39,253, 19,98,108,110,79,113,224,232,178,185, 112,104,218,246,97,228,
+    251,34,242,193,238,210,144,12,191,179,162,241, 81,51,145,235,249,14,239,107,
+    49,192,214, 31,181,199,106,157,184, 84,204,176,115,121,50,45,127, 4,150,254,
+    138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180};
+
+        private static int[] p;
+
+        static NoiseGengerator()
+        {
+            // 静态构造函数，为防止索引溢出将上面置换表再重复一遍
+            p = new int[512]; 
+            for (int i = 0; i < 512; i++)
+            {
+                p[i] = permutation[i % 256];
+            }
+        }
+        public static double Fade(double t)
+        {
+            // 插值函数，func = 6t^5 -15t^4 + 10t^3
+            return t * t * t * (t * (t * 6 - 15) + 10);
+        }
+
+        private static double Lerp(double x, double a, double b)
+        {
+            // 线性插值计算
+            return a + (b - a) * x;
+        }
+
+        private static double Grad(int hash, double x, double y, double angle_1, double angle_2)
+        {
+            switch(hash & 0x07)
+            {
+                // 梯度表 8种情况，这里angle_1和angle_2是从地图种子来随机的
+                // 同一个地图种子，会一定生成同个角度。
+                // 从每一个角度，生成单位圆向量，再通过旋转90度生成4个新的单位圆向量，两个角度生成8个。
+                case 0x00: return Math.Cos(angle_1)*x + Math.Sin(angle_1)*y;
+                case 0x01: return -Math.Sin(angle_1) * x + Math.Cos(angle_1) *y;
+                case 0x02: return -Math.Cos(angle_1)*x - Math.Sin(angle_1)*y;
+                case 0x03: return +Math.Sin(angle_1)*x -Math.Cos(angle_1)*y;
+                case 0x04: return Math.Cos(angle_2) * x + Math.Sin(angle_2) * y;
+                case 0x05: return -Math.Sin(angle_2) * x + Math.Cos(angle_2) * y;
+                case 0x06: return -Math.Cos(angle_2) * x - Math.Sin(angle_2) * y;
+                case 0x07: return Math.Sin(angle_2) * x - Math.Cos(angle_2) * y;
+                default: return 0;
+            }
+        }
+
+        public double PerlinNoize2d(double x, double y, double angle_1, double angle_2)
+        {
+            // 利用强转和位与求该点整数部分除与256的余数。
+            int xi = (int)x & 255; 
+            int yi = (int)y & 255;
+
+            // 分离小数部分
+            double xf = x - (int)x;
+            double yf = y - (int)y;
+
+            // 取得小数部分的插值结果
+            double u = Fade(xf);
+            double v = Fade(yf);
+
+            // 从置换表里置换一个伪随机数，用于之后的抽取梯度
+            int AA = p[p[xi]+yi];
+            int AB = p[p[xi]+yi+1];
+            int BA = p[p[xi + 1] + yi];
+            int BB = p[p[xi + 1] + yi+1];
+
+            // 用Grad函数伪随机梯度，并用Lerp做插值计算
+            return Lerp(v, Lerp(u, Grad(p[AA], xf, yf, angle_1, angle_2), Grad(p[BA], xf - 1, yf, angle_1, angle_2)), Lerp(u, Grad(p[AB], xf, yf - 1, angle_1, angle_2), Grad(p[BB], xf - 1, yf - 1, angle_1, angle_2)));
+        }
+        public double OctavePerlinNoise2d(double x, double y, int octaves, double persistence, double angle_1, double angle_2)
+        {
+            // 波形叠加函数，octaves是波形叠加次数，persistence为振幅衰减
+            double total = 0;
+            double frequency = 1;
+            double amplitude = 1;
+            double maxValue = 0;  
+            for (int i = 0; i < octaves; i++)
+            {
+                total += PerlinNoize2d(x * frequency, y * frequency, angle_1, angle_2) * amplitude;
+
+                maxValue += amplitude;
+
+                amplitude *= persistence;
+                frequency *= 2;
+            }
+
+            return total / maxValue;
+        }
+    }
+}
