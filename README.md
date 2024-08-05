@@ -41,15 +41,15 @@ Perlinノイズについて質問やコメントがある場合は、メッセ�
 Perlinノイズアルゴリズムと、このプロジェクトから得たその他の知識について詳しく説明します。
 
 # Use caution
-1、请勿生成过大地图，在地图大小5*5~10*10 等比插值比率5倍或10倍 范围中生成为好。
+1、请勿生成过大地图，在地图大小5×5~10×10 等比插值比率5倍或10倍 范围中生成为好。
 
 2、当生成5*5,5倍插值比率地图时将生成8405个方块。
 
 3、生成后可以使用Q/E键旋转观察地块。
 
-1、Do not generate too large map, it is better to generate in the range of the interpolation ratio 5 times or 10 times of the map size 5*5~10*10.
+1、Do not generate too large map, it is better to generate in the range of the interpolation ratio 5 times or 10 times of the map size 5×5~10×10.
 
-2、When generating a 5*5, 5x interpolation ratio map, 8405 blocks will be generated.
+2、When generating a 5×5, 5x interpolation ratio map, 8405 blocks will be generated.
 
 3、After spawning, you can use the Q/E keys to rotate the observation plot.
 
@@ -58,3 +58,11 @@ Perlinノイズアルゴリズムと、このプロジェクトから得たそ�
 2、5*5、5x補間比マップを生成すると、8405ブロックが生成されます。
 
 3、生成した後、Q/Eキーを使用して観測プロットを回転させることができます。
+
+# New release (last update 24/08/05)
+如果您想获取 Unity 打包生成后的版本请至Release，下载V1.0.0-alpha中的World_Generator_v1.0.0.zip。
+
+If you'd like to get the build Unity package, go to Release and download the World_Generator_v1.0.0.zip from v1.0.0-alpha
+
+ビルド Unity パッケージを入手する場合は、リリースに移動し、v1.0.0-alpha からWorld_Generator_v1.0.0.zipをダウンロードしてください。
+
